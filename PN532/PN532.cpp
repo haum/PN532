@@ -286,50 +286,82 @@ bool PN532::setPassiveActivationRetries(uint8_t maxRetries)
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-bool PN532::readPassiveTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *uidLength, uint16_t timeout, bool inlist)
+bool PN532::readPassiveTargetID(uint8_t cardBaudRate, uint8_t *uid, uint8_t *uidLength, uint16_t timeout, bool inlist)
 {
     pn532_packetbuffer[0] = PN532_COMMAND_INLISTPASSIVETARGET;
     pn532_packetbuffer[1] = 1;  // max 1 cards at once (we can set this to 2 later)
-    pn532_packetbuffer[2] = cardbaudrate;
+    pn532_packetbuffer[2] = cardBaudRate;
 
-    if (HAL(writeCommand)(pn532_packetbuffer, 3)) {
+    uint8_t pn532_packetbuffer_len;
+    switch(cardBaudRate) {
+        case PN532_MIFARE_ISO14443A:
+        {
+            pn532_packetbuffer_len = 3;
+            break;
+        }
+        case PN532_MIFARE_ISO14443B:
+        {
+            pn532_packetbuffer[3] = 0x00;
+            pn532_packetbuffer_len = 4;
+            break;
+        }
+        default:
+            return 0;
+    }
+    if (HAL(writeCommand)(pn532_packetbuffer, pn532_packetbuffer_len)) {
         return 0x0;  // command failed
     }
-
     // read data packet
     if (HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer), timeout) < 0) {
         return 0x0;
     }
 
-    // check some basic stuff
-    /* ISO14443A card response should be in the following format:
-
-      byte            Description
-      -------------   ------------------------------------------
-      b0              Tags Found
-      b1              Tag Number (only one used in this example)
-      b2..3           SENS_RES
-      b4              SEL_RES
-      b5              NFCID Length
-      b6..NFCIDLen    NFCID
-    */
-
     if (pn532_packetbuffer[0] != 1)
         return 0;
 
-    uint16_t sens_res = pn532_packetbuffer[2];
-    sens_res <<= 8;
-    sens_res |= pn532_packetbuffer[3];
+    switch(cardBaudRate) {
+        case PN532_MIFARE_ISO14443A:
+        {
+            // check some basic stuff
+            /* ISO14443A card response should be in the following format:
 
-    DMSG("ATQA: 0x");  DMSG_HEX(sens_res);
-    DMSG("SAK: 0x");  DMSG_HEX(pn532_packetbuffer[4]);
-    DMSG("\n");
+              byte            Description
+              -------------   ------------------------------------------
+              b0              Tags Found
+              b1              Tag Number (only one used in this example)
+              b2..3           SENS_RES
+              b4              SEL_RES
+              b5              NFCID Length
+              b6..NFCIDLen    NFCID
+            */
 
-    /* Card appears to be Mifare Classic */
-    *uidLength = pn532_packetbuffer[5];
+            uint16_t sens_res = pn532_packetbuffer[2];
+            sens_res <<= 8;
+            sens_res |= pn532_packetbuffer[3];
 
-    for (uint8_t i = 0; i < pn532_packetbuffer[5]; i++) {
-        uid[i] = pn532_packetbuffer[6 + i];
+            DMSG("ATQA: 0x");  DMSG_HEX(sens_res);
+            DMSG("SAK: 0x");  DMSG_HEX(pn532_packetbuffer[4]);
+            DMSG("\n");
+
+            /* Card appears to be Mifare Classic */
+            *uidLength = pn532_packetbuffer[5];
+
+            for (uint8_t i = 0; i < pn532_packetbuffer[5]; i++) {
+                uid[i] = pn532_packetbuffer[6 + i];
+            }
+            break;
+        }
+        case PN532_MIFARE_ISO14443B:
+        {
+            *uidLength = 12;
+
+            for (uint8_t i = 0; i < 12; i++) {
+                uid[i] = pn532_packetbuffer[2 + i];
+            }
+            break;
+        }
+        default:
+            return 0;
     }
 
     if (inlist) {
