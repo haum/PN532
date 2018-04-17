@@ -269,6 +269,49 @@ bool PN532::setPassiveActivationRetries(uint8_t maxRetries)
     return (0 < HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer)));
 }
 
+bool PN532::isTargetPresent(uint8_t cardBaudRate)
+{
+    switch(cardBaudRate) {
+        case PN532_MIFARE_ISO14443A:
+        {
+            pn532_packetbuffer[0] = PN532_COMMAND_INLISTPASSIVETARGET;
+            pn532_packetbuffer[1] = 1;  // max 1 cards at once (we can set this to 2 later)
+            pn532_packetbuffer[2] = cardBaudRate;
+
+            /* Send the command */
+            if (HAL(writeCommand)(pn532_packetbuffer, 3)) {
+                return 0;
+            }
+
+            /* Read the response packet */
+            int res = HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+            Serial.println(res);
+            if (res < 2) return false;
+            PrintHex(pn532_packetbuffer, res);
+            return (pn532_packetbuffer[1] == 0x01);
+            break;
+        }
+        case PN532_MIFARE_ISO14443B:
+        {
+            pn532_packetbuffer[0] = PN532_COMMAND_INCOMMUNICATETHRU;
+            pn532_packetbuffer[1] = 0xba;
+            pn532_packetbuffer[2] = 0x01;
+
+            /* Send the command */
+            if (HAL(writeCommand)(pn532_packetbuffer, 3)) {
+                return 0;
+            }
+
+            /* Read the response packet */
+            int res = HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer));
+            return (res == 3);
+            break;
+        }
+        default:
+            return false;
+    }
+}
+
 /***** ISO14443A Commands ******/
 
 /**************************************************************************/
