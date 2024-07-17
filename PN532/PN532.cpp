@@ -285,9 +285,9 @@ bool PN532::isTargetPresent(uint8_t cardBaudRate)
 
             /* Read the response packet */
             int res = HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer));
-            Serial.println(res);
+            // Serial.println(res);
             if (res < 2) return false;
-            PrintHex(pn532_packetbuffer, res);
+            // PrintHex(pn532_packetbuffer, res);
             return (pn532_packetbuffer[1] == 0x01);
             break;
         }
